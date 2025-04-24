@@ -67,6 +67,7 @@ async function handleLogin(event) {
     const password = document.getElementById('loginPassword').value;
     
     try {
+        console.log('Attempting login with:', { username });
         const response = await fetch('http://localhost:8080/api/auth/login', {
             method: 'POST',
             headers: {
@@ -75,21 +76,27 @@ async function handleLogin(event) {
             body: JSON.stringify({ username, password })
         });
         
+        console.log('Login response status:', response.status);
+        const data = await response.json();
+        console.log('Login response data:', data);
+        
         if (response.ok) {
-            const user = await response.json();
-            currentUser = user;
+            currentUser = data;
             loginModal.hide();
             updateUIForLoggedInUser();
             loadPortfolio();
             loadTransactions();
             showAlert('Login successful!', 'success');
         } else {
-            const error = await response.text();
-            showAlert(error);
+            showAlert(data || 'Login failed. Please try again.');
         }
     } catch (error) {
-        console.error('Login error:', error);
-        showAlert('An error occurred during login.');
+        console.error('Login error details:', {
+            message: error.message,
+            stack: error.stack,
+            response: error.response
+        });
+        showAlert('An error occurred during login. Please try again.');
     }
 }
 
@@ -100,6 +107,7 @@ async function handleRegister(event) {
     const password = document.getElementById('registerPassword').value;
     
     try {
+        console.log('Attempting registration with:', { username, email });
         const response = await fetch('http://localhost:8080/api/auth/register', {
             method: 'POST',
             headers: {
@@ -108,16 +116,23 @@ async function handleRegister(event) {
             body: JSON.stringify({ username, email, password })
         });
         
+        console.log('Register response status:', response.status);
+        const data = await response.json();
+        console.log('Register response data:', data);
+        
         if (response.ok) {
             registerModal.hide();
             showAlert('Registration successful! Please login.', 'success');
         } else {
-            const error = await response.text();
-            showAlert(error);
+            showAlert(data || 'Registration failed. Please try again.');
         }
     } catch (error) {
-        console.error('Registration error:', error);
-        showAlert('An error occurred during registration.');
+        console.error('Registration error details:', {
+            message: error.message,
+            stack: error.stack,
+            response: error.response
+        });
+        showAlert('An error occurred during registration. Please try again.');
     }
 }
 
@@ -140,47 +155,18 @@ async function handleLogout() {
 // Data Loading Functions
 async function loadCryptocurrencies() {
     try {
-        // Mock data for our 5 cryptocurrencies
-        cryptocurrencies = [
-            {
-                symbol: 'BTC',
-                name: 'Bitcoin',
-                currentPrice: 50000.00,
-                priceChangePercentage24h: 2.5,
-                marketCap: 950000000000
-            },
-            {
-                symbol: 'ETH',
-                name: 'Ethereum',
-                currentPrice: 3000.00,
-                priceChangePercentage24h: 1.8,
-                marketCap: 350000000000
-            },
-            {
-                symbol: 'USDT',
-                name: 'Tether',
-                currentPrice: 1.00,
-                priceChangePercentage24h: 0.0,
-                marketCap: 80000000000
-            },
-            {
-                symbol: 'XRP',
-                name: 'XRP',
-                currentPrice: 0.50,
-                priceChangePercentage24h: -0.5,
-                marketCap: 25000000000
-            },
-            {
-                symbol: 'BNB',
-                name: 'Binance Coin',
-                currentPrice: 400.00,
-                priceChangePercentage24h: 3.2,
-                marketCap: 60000000000
-            }
-        ];
+        const response = await fetch('http://localhost:8080/api/crypto/top');
+        if (!response.ok) {
+            throw new Error('Failed to fetch cryptocurrencies');
+        }
+        cryptocurrencies = await response.json();
         updateCryptocurrencyTable();
+        
+        // Refresh data every 30 seconds
+        setTimeout(loadCryptocurrencies, 30000);
     } catch (error) {
         console.error('Error loading cryptocurrencies:', error);
+        showAlert('Failed to load cryptocurrency data. Please try again later.');
     }
 }
 
@@ -188,7 +174,7 @@ async function loadPortfolio() {
     if (!currentUser) return;
     
     try {
-        const response = await fetch('/api/portfolio');
+        const response = await fetch('http://localhost:8080/api/portfolio');
         if (response.ok) {
             portfolio = await response.json();
             updatePortfolioTable();
@@ -202,7 +188,7 @@ async function loadTransactions() {
     if (!currentUser) return;
     
     try {
-        const response = await fetch('/api/transactions');
+        const response = await fetch('http://localhost:8080/api/transactions');
         if (response.ok) {
             transactions = await response.json();
             updateTransactionsTable();
@@ -214,9 +200,16 @@ async function loadTransactions() {
 
 // Trading Functions
 function openTradeModal(crypto, type) {
+    if (!currentUser) {
+        loginModal.show();
+        return;
+    }
+
     document.getElementById('tradeModalTitle').textContent = `${type} ${crypto.symbol}`;
-    document.getElementById('tradeType').value = type;
-    document.getElementById('currentPrice').value = crypto.currentPrice.toFixed(2);
+    document.getElementById('tradeType').value = type.toLowerCase();
+    document.getElementById('currentPrice').value = typeof crypto === 'string' ? 
+        cryptocurrencies.find(c => c.symbol === crypto)?.lastPrice : 
+        crypto.currentPrice;
     document.getElementById('tradeAmount').value = '';
     document.getElementById('tradeTotal').value = '';
     tradeModal.show();
@@ -231,8 +224,13 @@ async function handleTrade(event) {
     const price = parseFloat(document.getElementById('currentPrice').value);
     const symbol = document.getElementById('tradeModalTitle').textContent.split(' ')[1];
     
+    if (isNaN(amount) || amount <= 0) {
+        showAlert('Please enter a valid amount', 'danger');
+        return;
+    }
+    
     try {
-        const response = await fetch('/api/trades', {
+        const response = await fetch('http://localhost:8080/api/trades', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -253,11 +251,11 @@ async function handleTrade(event) {
             showAlert('Trade executed successfully!', 'success');
         } else {
             const error = await response.json();
-            showAlert(error.message || 'Trade failed.');
+            showAlert(error.message || 'Trade failed.', 'danger');
         }
     } catch (error) {
         console.error('Trade error:', error);
-        showAlert('An error occurred during the trade.');
+        showAlert('An error occurred during the trade.', 'danger');
     }
 }
 
@@ -288,27 +286,35 @@ function updateUIForLoggedOutUser() {
 }
 
 function updateCryptocurrencyTable() {
-    const tbody = document.getElementById('cryptoTableBody');
-    tbody.innerHTML = '';
-    
+    const tableBody = document.getElementById('cryptoTableBody');
+    tableBody.innerHTML = '';
+
     cryptocurrencies.forEach(crypto => {
         const row = document.createElement('tr');
-        const changeClass = crypto.priceChangePercentage24h >= 0 ? 'price-up' : 'price-down';
+        
+        // Format numbers
+        const lastPrice = parseFloat(crypto.lastPrice).toFixed(2);
+        const volume = parseFloat(crypto.volume).toLocaleString();
+        const high = parseFloat(crypto.high).toFixed(2);
+        const low = parseFloat(crypto.low).toFixed(2);
+        
+        // Determine color for 24h change
+        const change24h = crypto.change24h;
+        const changeColor = change24h.startsWith('-') ? 'text-danger' : 'text-success';
         
         row.innerHTML = `
             <td>${crypto.symbol}</td>
-            <td>${crypto.name}</td>
-            <td>$${crypto.currentPrice.toFixed(2)}</td>
-            <td class="${changeClass}">${crypto.priceChangePercentage24h.toFixed(2)}%</td>
-            <td>$${crypto.marketCap.toLocaleString()}</td>
+            <td>${crypto.symbol}</td>
+            <td>$${lastPrice}</td>
+            <td class="${changeColor}">${change24h}</td>
+            <td>$${volume}</td>
             <td>
-                ${currentUser ? `
-                    <button class="btn btn-sm btn-primary me-1" onclick="openTradeModal(${JSON.stringify(crypto)}, 'BUY')">Buy</button>
-                    <button class="btn btn-sm btn-danger" onclick="openTradeModal(${JSON.stringify(crypto)}, 'SELL')">Sell</button>
-                ` : 'Login to trade'}
+                <button class="btn btn-sm btn-primary me-1" onclick="openTradeModal('${crypto.symbol}', 'buy')">Buy</button>
+                <button class="btn btn-sm btn-danger" onclick="openTradeModal('${crypto.symbol}', 'sell')">Sell</button>
             </td>
         `;
-        tbody.appendChild(row);
+        
+        tableBody.appendChild(row);
     });
 }
 

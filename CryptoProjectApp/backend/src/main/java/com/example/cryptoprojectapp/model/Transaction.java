@@ -4,6 +4,7 @@ import com.example.cryptoprojectapp.enums.TransactionType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "transactions")
@@ -35,6 +36,9 @@ public class Transaction {
     @NotNull(message = "Total amount is required")
     @Positive(message = "Total amount must be positive")
     private Double totalAmount;
+
+    @Column(nullable = false)
+    private LocalDateTime timestamp = LocalDateTime.now();
 
     // Getters and Setters
     public Long getId() {
@@ -91,5 +95,13 @@ public class Transaction {
 
     public void setTotalAmount(Double totalAmount) {
         this.totalAmount = totalAmount;
+    }
+
+    public LocalDateTime getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(LocalDateTime timestamp) {
+        this.timestamp = timestamp;
     }
 } 

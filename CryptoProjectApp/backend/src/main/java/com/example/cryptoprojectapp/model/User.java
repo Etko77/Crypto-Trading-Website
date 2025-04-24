@@ -5,10 +5,14 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Entity
 @Table(name = "users")
 public class User {
+    private static final Logger logger = LoggerFactory.getLogger(User.class);
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -24,8 +28,6 @@ public class User {
     private String email;
 
     @NotBlank(message = "Password is required")
-    @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d]{6,}$", 
-            message = "Password must contain at least one letter and one number")
     private String password;
 
     private double balance = 10000.0; // Default balance for new users
@@ -60,6 +62,10 @@ public class User {
     }
 
     public void setPassword(String password) {
+        logger.info("Setting password: {}", password);
+        logger.info("Password length: {}", password != null ? password.length() : 0);
+        logger.info("Password contains letter: {}", password != null && password.matches(".*[A-Za-z].*"));
+        logger.info("Password contains number: {}", password != null && password.matches(".*\\d.*"));
         this.password = password;
     }
 
